@@ -1,0 +1,9 @@
+
+set_io LED0 99  # output
+set_io LED1 98  # output
+set_io LED2 97  # output
+set_io LED3 96  # output
+set_io LED4 95  # output
+
+set_io CLK 21  # input
+

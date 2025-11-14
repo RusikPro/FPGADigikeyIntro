@@ -1,0 +1,29 @@
+# Build artifacts
+_build/
+*.json
+*.asc
+*.pnr
+*.rpt
+*.txt
+
+# IDE
+.vscode/
+*.swp
+*.swo
+*~
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# EDA tools
+*.log
+*.o
+*.a
+*.so
