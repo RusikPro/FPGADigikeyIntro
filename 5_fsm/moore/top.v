@@ -15,7 +15,7 @@ module fsm_moore (
     localparam STATE_COUNTING   = 2'd1;
     localparam STATE_DONE       = 2'd2;
 
-    localparam MAX_CLK_COUNT    = 24'd1500000;
+    localparam MAX_CLK_COUNT    = 24'd1500000 - 1;
     localparam MAX_LED_COUNT    = 4'hF;
 
     // Internal signals

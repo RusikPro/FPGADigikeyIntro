@@ -35,7 +35,7 @@ module moore_fsm_initial (
     localparam  STATE_DONE      = 2'd2;
 
     // Max counts for clock divider and counter
-    localparam  MAX_CLK_COUNT   = 24'd1500000;
+    localparam  MAX_CLK_COUNT   = 24'd1500000 - 1;
     localparam  MAX_LED_COUNT   = 4'hF;
 
     // Internal signals

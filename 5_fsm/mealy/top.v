@@ -14,7 +14,7 @@ module fsm_mealy (
     localparam STATE_IDLE       = 2'd0;
     localparam STATE_COUNTING   = 2'd1;
 
-    localparam MAX_CLK_COUNT    = 24'd1500000;
+    localparam MAX_CLK_COUNT    = 24'd1500000 - 1;
     localparam MAX_LED_COUNT    = 4'hF;
 
     // Internal signals
