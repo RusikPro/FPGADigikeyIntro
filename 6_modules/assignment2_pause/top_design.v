@@ -40,6 +40,14 @@ module main (
         .clean(pause_pulse)
     );
 
+    wire go_pulse;
+
+    button_debounce go_db (
+        .clk(clk),
+        .noisy(go),
+        .clean(go_pulse)
+    );
+
     always @ (posedge clk or posedge rst) begin
         if (rst == 1'b1) begin
             is_pause <= 1'b0;
@@ -53,21 +61,12 @@ module main (
 
     clock_divider # (
         .COUNT_WIDTH(24),
-        .MAX_COUNT(1500000 - 1)
+        .MAX_COUNT(2000000 - 1)
     ) div (
         .clk(clk),
         .rst(rst),
         .out(divided_clk),
         .pause_sig(pause_sig)
-    );
-
-
-    wire go_pulse;
-
-    button_debounce go_db (
-        .clk(clk),
-        .noisy(go),
-        .clean(go_pulse)
     );
 
     // Remember if we're counting up or down
@@ -98,6 +97,7 @@ module main (
         .div_clk(divided_clk),
         .rst(rst),
         .go_sig(go_pulse | down_done),
+        .pause_sig(pause_pulse),
         .out(up_out),
         .done_sig(up_done)
     );
@@ -111,6 +111,7 @@ module main (
         .div_clk(divided_clk),
         .rst(rst),
         .go_sig(up_done),
+        .pause_sig(pause_pulse),
         .out(down_out),
         .done_sig(down_done)
     );

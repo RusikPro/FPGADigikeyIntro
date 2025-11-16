@@ -7,23 +7,32 @@ module counter # (
     input wire          div_clk,
     input wire          rst,
     input wire          go_sig,
+    input wire          pause_sig,
 
     output reg [3:0]    out,
     output reg          done_sig
 );
     localparam STATE_IDLE           = 2'd0;
     localparam STATE_COUNTING       = 2'd1;
+    localparam STATE_PAUSE          = 2'd2;
 
-    reg [1:0]   state = STATE_IDLE;
+    reg [1:0]   state       =   STATE_IDLE;
+    reg [1:0]   prev_state  =   STATE_IDLE;
 
     always @ (posedge clk or posedge rst) begin
         if (rst == 1'b1) begin
             state <= STATE_IDLE;
-        // end else if (pause_sig == 1'b1) begin
-        //     out <= out;
+        end else if (pause_sig == 1'b1 && state == STATE_COUNTING) begin
+            // out <= out;
+            // pause_sig <= 0;
+            prev_state <= state;
+            state <= STATE_PAUSE;
         end else begin
-            if (go_sig == 1'b1 && state == STATE_IDLE) begin
+            if (go_sig == 1'b1 && ( state == STATE_IDLE || state == STATE_PAUSE ) ) begin
                 state <= STATE_COUNTING;
+                prev_state <= STATE_IDLE;
+            end else if (pause_sig == 1'b1 && state == STATE_PAUSE) begin
+                state <= prev_state;
             end
 
             if (div_clk) begin
@@ -31,6 +40,9 @@ module counter # (
 
                 STATE_IDLE: begin
                     done_sig <= 1'b0;
+                end
+
+                STATE_PAUSE: begin
                 end
 
                 STATE_COUNTING: begin
@@ -67,6 +79,8 @@ module counter # (
                     end else begin
                         out <= 4'hF;
                     end
+                end
+                STATE_PAUSE: begin
                 end
                 STATE_COUNTING: begin
                     if (UP == 1'b1) begin

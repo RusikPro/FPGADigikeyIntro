@@ -23,7 +23,7 @@ module clock_divider # (
             count <= 0;
             toggle <= 1'b0;
             out <= 0;
-        end else if (pause_sig == 1'b1) begin
+        // end else if (pause_sig == 1'b1) begin
         end else if (count == MAX_COUNT) begin
             count <= 0;
             toggle <= ~toggle;
