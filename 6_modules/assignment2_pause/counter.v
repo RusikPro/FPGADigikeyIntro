@@ -22,17 +22,17 @@ module counter # (
     always @ (posedge clk or posedge rst) begin
         if (rst == 1'b1) begin
             state <= STATE_IDLE;
-        end else if (pause_sig == 1'b1 && state == STATE_COUNTING) begin
-            // out <= out;
-            // pause_sig <= 0;
-            prev_state <= state;
-            state <= STATE_PAUSE;
+            prev_state <= STATE_IDLE;
+            done_sig <= 1'b0;
         end else begin
-            if (go_sig == 1'b1 && ( state == STATE_IDLE || state == STATE_PAUSE ) ) begin
-                state <= STATE_COUNTING;
-                prev_state <= STATE_IDLE;
+            if (pause_sig == 1'b1 && state == STATE_COUNTING) begin
+                prev_state <= state;
+                state <= STATE_PAUSE;
             end else if (pause_sig == 1'b1 && state == STATE_PAUSE) begin
                 state <= prev_state;
+            end else if (go_sig == 1'b1 && state == STATE_IDLE ) begin
+                prev_state <= state;
+                state <= STATE_COUNTING;
             end
 
             if (div_clk) begin
@@ -52,7 +52,7 @@ module counter # (
                         state <= STATE_IDLE;
                     end
                     // Check if done (counting down)
-                    else if (UP == 1'b0 && out == 0) begin
+                    else if (UP == 1'b0 && out == 4'd0) begin
                         done_sig <= 1'b1;
                         state <= STATE_IDLE;
                     end
@@ -69,7 +69,11 @@ module counter # (
     // Handle the out counter
     always @ (posedge clk or posedge rst) begin
         if (rst == 1'b1) begin
-            out <= 4'd0;
+            if (UP == 1'b1) begin
+                out <= 4'd0;
+            end else begin
+                out <= 4'hF;
+            end
         end else begin
             if (div_clk) begin
                 case (state)

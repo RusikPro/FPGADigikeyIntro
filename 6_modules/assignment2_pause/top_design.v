@@ -28,10 +28,6 @@ module main (
     assign go       = ~go_btn;
     assign pause    = ~pause_btn;
 
-    wire pause_sig;
-
-    assign pause_sig = is_pause;
-
     wire pause_pulse;
 
     button_debounce pause_db (
@@ -40,6 +36,20 @@ module main (
         .clean(pause_pulse)
     );
 
+    wire system_idle = (up_done == 1'b0) && (down_done == 1'b0) &&
+                       (up_out == 4'd0) && (down_out == 4'hF);
+
+    reg is_paused = 1'b0;
+
+    // Track global pause state (one flip-flop)
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            is_paused <= 1'b0;
+        end else if (pause_pulse && !system_idle) begin
+            is_paused <= ~is_paused;   // toggle pause
+        end
+    end
+
     wire go_pulse;
 
     button_debounce go_db (
@@ -47,14 +57,6 @@ module main (
         .noisy(go),
         .clean(go_pulse)
     );
-
-    always @ (posedge clk or posedge rst) begin
-        if (rst == 1'b1) begin
-            is_pause <= 1'b0;
-        end else if (pause_pulse) begin
-            is_pause <= ~is_pause;
-        end
-    end
 
     // The divided clock
     wire divided_clk;
@@ -72,7 +74,11 @@ module main (
     // Remember if we're counting up or down
     always @ (posedge divided_clk or posedge rst) begin
         if (rst == 1'b1) begin
-            counting_up <= 1'b1;
+            counting_up <= 4'b1;
+            // up_done <= 1'b0;
+            // down_done <= 1'b0;
+            // up_out <= 4'b0;
+            // down_out <= 4'hF;
         end else begin
             if (up_done == 1'b1) begin
                 counting_up <= 1'b0;
@@ -92,11 +98,13 @@ module main (
 
     wire done_sig;
 
+    wire go_allowed = go_pulse & system_idle;
+
     counter cnt_up (
         .clk(clk),
         .div_clk(divided_clk),
         .rst(rst),
-        .go_sig(go_pulse | down_done),
+        .go_sig( (go_allowed) | (down_done & ~is_paused) ),
         .pause_sig(pause_pulse),
         .out(up_out),
         .done_sig(up_done)
@@ -110,7 +118,7 @@ module main (
         .clk(clk),
         .div_clk(divided_clk),
         .rst(rst),
-        .go_sig(up_done),
+        .go_sig( up_done & ~is_paused ),
         .pause_sig(pause_pulse),
         .out(down_out),
         .done_sig(down_done)
