@@ -5,9 +5,8 @@ module clock_divider # (
 ) (
 
     // Inputs
-    input       clk,
-    input       rst,
-    input wire  pause_sig,
+    input wire  clk,
+    input wire  rst,
 
     // Outputs
     output  reg out
@@ -23,7 +22,6 @@ module clock_divider # (
             count <= 0;
             toggle <= 1'b0;
             out <= 0;
-        // end else if (pause_sig == 1'b1) begin
         end else if (count == MAX_COUNT) begin
             count <= 0;
             toggle <= ~toggle;

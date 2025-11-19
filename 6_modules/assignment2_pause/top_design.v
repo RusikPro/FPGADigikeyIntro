@@ -11,51 +11,25 @@ module main (
     output reg [3:0]    led
 );
 
-    // Internal signal
-    wire        rst;
-    wire        go;
-    wire        pause;
-    wire        up_done;
-    wire        down_done;
-    wire [3:0]  up_out;
-    wire [3:0]  down_out;
+    // Active-high button signals
+    wire rst   = ~rst_btn;
+    wire go    = ~go_btn;
+    wire pause = ~pause_btn;
 
-    reg         counting_up     = 1'b1;
-    reg         is_pause        = 1'b0;
-
-    // Invert active-low button
-    assign rst      = ~rst_btn;
-    assign go       = ~go_btn;
-    assign pause    = ~pause_btn;
-
-    wire pause_pulse;
-
-    button_debounce pause_db (
-        .clk(clk),
-        .noisy(pause),
-        .clean(pause_pulse)
-    );
-
-    wire system_idle = (up_done == 1'b0) && (down_done == 1'b0) &&
-                       (up_out == 4'd0) && (down_out == 4'hF);
-
-    reg is_paused = 1'b0;
-
-    // Track global pause state (one flip-flop)
-    always @(posedge clk or posedge rst) begin
-        if (rst) begin
-            is_paused <= 1'b0;
-        end else if (pause_pulse && !system_idle) begin
-            is_paused <= ~is_paused;   // toggle pause
-        end
-    end
-
+    // Debounced button pulses
     wire go_pulse;
+    wire pause_pulse;
 
     button_debounce go_db (
         .clk(clk),
         .noisy(go),
         .clean(go_pulse)
+    );
+
+    button_debounce pause_db (
+        .clk(clk),
+        .noisy(pause),
+        .clean(pause_pulse)
     );
 
     // The divided clock
@@ -67,59 +41,165 @@ module main (
     ) div (
         .clk(clk),
         .rst(rst),
-        .out(divided_clk),
-        .pause_sig(pause_sig)
+        .out(divided_clk)
     );
 
-    // Remember if we're counting up or down
-    always @ (posedge divided_clk or posedge rst) begin
-        if (rst == 1'b1) begin
-            counting_up <= 4'b1;
-            // up_done <= 1'b0;
-            // down_done <= 1'b0;
-            // up_out <= 4'b0;
-            // down_out <= 4'hF;
+
+     // Counter outputs
+    wire [3:0] up_out;
+    wire [3:0] down_out;
+    wire       up_done;
+    wire       down_done;
+
+    // Enables for counters
+    reg up_en;
+    reg down_en;
+
+    // Which direction is currently active (for LED mux)
+    reg counting_up;
+
+    // --------------------------- Main FSM -----------------------------------
+
+    localparam S_IDLE        = 3'd0;
+    localparam S_UP          = 3'd1;
+    localparam S_DOWN        = 3'd2;
+    localparam S_PAUSE_UP    = 3'd3;
+    localparam S_PAUSE_DOWN  = 3'd4;
+
+    reg [2:0] state = S_IDLE;
+    reg       first_cycle = 1'b1;
+
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            // After FPGA init or rst: always IDLE
+            state       <= S_IDLE;
+            up_en       <= 1'b0;
+            down_en     <= 1'b0;
+            counting_up <= 1'b1;
+        end else if (first_cycle) begin
+            // *** implicit reset on first clock after power‑up ***
+            state       <= S_IDLE;
+            up_en       <= 1'b0;
+            down_en     <= 1'b0;
+            counting_up <= 1'b1;
+            first_cycle <= 1'b0;   // next cycles behave normally
         end else begin
-            if (up_done == 1'b1) begin
-                counting_up <= 1'b0;
-            end else if (down_done == 1'b1) begin
-                counting_up <= 1'b1;
-            end
+            // Defaults each cycle; overridden in states
+            up_en   <= 1'b0;
+            down_en <= 1'b0;
+
+            case (state)
+                S_IDLE: begin
+
+                    counting_up <= 1'b1;
+
+                    // Only GO can leave IDLE
+                    if (go_pulse) begin
+                        // Start UP phase
+                        state       <= S_UP;
+                        up_en       <= 1'b1;
+                        counting_up <= 1'b1;
+                    end
+                end
+
+                S_UP: begin
+                    counting_up <= 1'b1;
+                    up_en       <= 1'b1;
+
+                    // PAUSE can freeze only during counting
+                    if (pause_pulse) begin
+                        state <= S_PAUSE_UP;
+
+                    end else if (up_done) begin
+                        // UP finished -> go DOWN
+                        state       <= S_DOWN;
+                        down_en     <= 1'b1;
+                        counting_up <= 1'b0;
+                    end
+
+                    // GO ignored while in UP (we don't check go_pulse here)
+                end
+
+                S_DOWN: begin
+                    counting_up <= 1'b0;
+                    down_en     <= 1'b1;
+
+                    // PAUSE can freeze only during counting
+                    if (pause_pulse) begin
+                        state <= S_PAUSE_DOWN;
+
+                    end else if (down_done) begin
+                        // Eternal loop: after DOWN, go back to UP
+                        state       <= S_UP;
+                        up_en       <= 1'b1;
+                        counting_up <= 1'b1;
+                    end
+
+                    // GO ignored while in DOWN
+                end
+
+                S_PAUSE_UP: begin
+                    // Paused during UP, freeze counters
+                    counting_up <= 1'b1;
+                    // up_en = 0 (default), so counter is held
+
+                    // While paused, GO must NOT change anything:
+
+                    // PAUSE again resumes from same position
+                    if (pause_pulse) begin
+                        state <= S_UP;
+                        up_en <= 1'b1;
+                    end
+                end
+
+                S_PAUSE_DOWN: begin
+                    // Paused during DOWN, freeze counters
+                    counting_up <= 1'b0;
+                    // down_en = 0 (default), so counter is held
+
+                    // GO ignored here as well
+
+                    // PAUSE again resumes from same position
+                    if (pause_pulse) begin
+                        state   <= S_DOWN;
+                        down_en <= 1'b1;
+                    end
+                end
+
+                default: begin
+                    state       <= S_IDLE;
+                    up_en       <= 1'b0;
+                    down_en     <= 1'b0;
+                    counting_up <= 1'b1;
+                end
+            endcase
         end
     end
 
-    always @ ( * ) begin
-        if (counting_up == 1'b1) begin
+    // LED mux
+    always @(*) begin
+        if (counting_up)
             led = up_out;
-        end else begin
+        else
             led = down_out;
-        end
     end
 
-    wire done_sig;
+    // ------------ Counter instances ------------
 
-    wire go_allowed = go_pulse & system_idle;
-
-    counter cnt_up (
+    counter #(.UP(1)) cnt_up (
         .clk(clk),
         .div_clk(divided_clk),
-        .rst(rst),
-        .go_sig( (go_allowed) | (down_done & ~is_paused) ),
-        .pause_sig(pause_pulse),
+        .rst(rst | first_cycle),
+        .en(up_en),
         .out(up_out),
         .done_sig(up_done)
     );
 
-    counter # (
-        .COUNT_WIDTH(24),
-        .MAX_COUNT(6000000 - 1),
-        .UP(0)
-    ) cnt_down (
+    counter #(.UP(0)) cnt_down (
         .clk(clk),
         .div_clk(divided_clk),
-        .rst(rst),
-        .go_sig( up_done & ~is_paused ),
-        .pause_sig(pause_pulse),
+        .rst(rst | first_cycle),
+        .en(down_en),
         .out(down_out),
         .done_sig(down_done)
     );
